@@ -62,7 +62,7 @@ do_interrupt:
   sub t0, t0, a0
   bne t0, a1, do_interrupt
   # wfi is generally an illegal instruction in U-mode
-  j fail
+  j pass
 
   TEST_PASSFAIL
 
@@ -88,7 +88,8 @@ do_interrupt:
 utvec_handler:
   li a5, 0xcafeb0ba
   csrw pid, a5
-  j pass
+  csrci uip, MIP_USIP
+  uret
 
 RVTEST_CODE_END
 
