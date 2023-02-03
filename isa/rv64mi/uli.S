@@ -21,26 +21,28 @@ RVTEST_CODE_BEGIN
 
 1:
 
-  # clear registers
+  # clear CSR registers for a clean slate
   csrwi sideleg, 0
   csrwi mip, 0
   li t0, UIP_USIP
   csrc mie, t0
 
-  # set flag
+  # set initial flag
   li a5, 0xdeadbeef
   csrw pid, a5
 
-  csrwi mip, MIP_USIP
-  csrwi mie, MIP_USIP
-  csrsi ustatus, MSTATUS_UIE
+  # Enable supervisor and user interrupts (cascading)
+  csrsi mstatus, MSTATUS_UIE
   csrsi mstatus, MSTATUS_SIE
 
+  # Enable user software interrupts
+  csrwi mie, MIP_USIP
+  
   # delegate software interrupts to user mode
   csrwi mideleg, MIP_USIP
   csrwi sideleg, MIP_USIP
-  la t0, stvec_handler
-  csrw stvec, t0
+
+  # install ULI handler
   la t0, utvec_handler
   csrw utvec, t0
 
@@ -51,43 +53,29 @@ RVTEST_CODE_BEGIN
   csrc mstatus, t0
   li t1, (MSTATUS_MPP & ~MSTATUS_MPP) * PRV_U
   csrs mstatus, t1
-  li t0, 100
-  li a0, 1
-  li a1, 0
   mret
 
 do_interrupt:
-  # csrsi sstatus, MSTATUS_SIE
-  # loop until interrupt is delivered
-  sub t0, t0, a0
-  bne t0, a1, do_interrupt
-  # wfi is generally an illegal instruction in U-mode
+  # write user software interrupt pending bit
+  csrwi uip, MIP_USIP
+
+  # verify flag set by ULI handler
+  li a5, 0xcafeb0ba
+  csrr a4, pid
+  bne a4, a5, fail
   j pass
 
+  # macro for pass/fail routines
   TEST_PASSFAIL
 
-# For now, simply verifies that we reach the installed handler
-#  .align 2
-#  .global mtvec_handler
-#mtvec_handler:
-#  li a5, 0x01abcdef
-#  csrw pid, a5
-#  j fail
-
-# For now, simply verifies that we reach the installed handler
-#  .align 2
-#  .global stvec_handler
-#stvec_handler:
-#  li a5, 0xfeedbead
-#  csrw pid, a5
-#  j fail
-
-# For now, simply verifies that we reach the installed handler
+# ULI handler
   .align 2
   .global utvec_handler
 utvec_handler:
+  # set flag value 
   li a5, 0xcafeb0ba
   csrw pid, a5
+  # clear pending interrupt bit and return
   csrci uip, MIP_USIP
   uret
 
